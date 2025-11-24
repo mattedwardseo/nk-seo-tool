@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "Bash(test:*)",
+      "Bash(npx create-next-app:*)",
+      "Bash(move C:Usersmattbnk-seo-tool.env C:Usersmattbnk-seo-tool-temp )",
+      "Bash(move C:Usersmattbnk-seo-tool.env.local C:Usersmattbnk-seo-tool-temp )",
+      "Bash(move \"C:\\Users\\mattb\\nk-seo-tool\\phase-one-v1-11-24-2025.md\" C:Usersmattbnk-seo-tool-temp )",
+      "Bash(move \"C:\\Users\\mattb\\nk-seo-tool\\seo-tool-implementation-strategy-11-21-2025.md\" C:Usersmattbnk-seo-tool-temp )",
+      "Bash(move \"C:\\Users\\mattb\\nk-seo-tool\\seo-tool-research-v2-11-21-2025.md\" C:Usersmattbnk-seo-tool-temp)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run build:*)",
+      "Bash(vercel --version:*)",
+      "Bash(vercel whoami:*)",
+      "Bash(vercel deploy:*)",
+      "Bash(vercel env add:*)",
+      "Bash(printf:*)",
+      "Bash(curl:*)",
+      "Bash(vercel domains:*)",
+      "Bash(vercel ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Complete Phase 1 - Foundation setup\n\n- Next.js 16 with TypeScript strict mode and Tailwind CSS\n- Prisma ORM 6.x with TimescaleDB on Neon\n- Two-phase migration strategy (tables + hypertable)\n- Composite primary key for TimescaleDB partitioning\n- Health check API endpoint with TimescaleDB verification\n- Deployed to Vercel\n- Complete context management system (CLAUDE.md, TODO.md, etc.)\n\nKey decisions:\n- ADR-001: Two-phase migration for TimescaleDB\n- ADR-002: Pooled vs unpooled database connections\n- ADR-003: Composite primary key for hypertable\n- ADR-004: Accept Apache license limitations\n\nPhase 1 complete - ready for Phase 2 DataForSEO integration\n\n🤖 Generated with Claude Code\nEOF\n)\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

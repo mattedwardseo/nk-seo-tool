@@ -1,0 +1,57 @@
+// Prisma schema for SEO Audit Platform
+// Uses PostgreSQL with TimescaleDB on Neon
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  audits    Audit[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Audit {
+  id        String        @id @default(cuid())
+  userId    String
+  domain    String
+  status    String        @default("pending")
+  score     Int?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metrics   AuditMetric[]
+
+  @@index([userId])
+  @@index([domain])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("audits")
+}
+
+model AuditMetric {
+  id          Int      @id @default(autoincrement())
+  auditId     String   @map("audit_id")
+  metricName  String   @map("metric_name") @db.VarChar(100)
+  metricValue Decimal? @map("metric_value") @db.Decimal(10, 2)
+  recordedAt  DateTime @map("recorded_at") @db.Timestamptz()
+  metadata    Json?
+  audit       Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId, recordedAt(sort: Desc)])
+  @@index([metricName])
+  @@index([recordedAt(sort: Desc)])
+  @@map("audit_metrics")
+}
