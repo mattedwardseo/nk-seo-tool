@@ -14,8 +14,6 @@ import {
   queryGemini,
   queryPerplexity,
   type LLMResponsesResult,
-  type LLMCitation,
-  type LLMBrandMention,
 } from '@/lib/dataforseo/modules/ai-optimization'
 import {
   updateAISeoRunStatus,
@@ -62,18 +60,17 @@ export const processAISeoAnalysis = inngest.createFunction(
   },
   { event: 'ai-seo/analysis.start' },
   async ({ event, step }) => {
+    const eventData = event.data as AISeoAnalysisEvent['data']
+    const {
+      runId,
+      domain,
+      businessName,
+      keywords,
+      llmPlatforms,
+      locationCode = 2840, // Default to US
+    } = eventData
+
     try {
-      const { 
-        runId, 
-        domainId, 
-        domain, 
-        businessName, 
-        keywords, 
-        llmPlatforms,
-        city,
-        state,
-        locationCode = 2840, // Default to US
-      } = event.data
 
       // Step 1: Update status to running
       await step.run('update-status-running', async () => {
@@ -154,7 +151,8 @@ export const processAISeoAnalysis = inngest.createFunction(
             
             if (response && response.items && response.items.length > 0) {
               const item = response.items[0] // Get first/main response
-              
+              if (!item) continue
+
               // Extract citations
               const citations = item.citations?.map(c => ({
                 url: c.url,
@@ -242,11 +240,11 @@ export const processAISeoAnalysis = inngest.createFunction(
                   limit: 10,
                 })
                 
-                const isMentioned = mentionResult && mentionResult.items_count > 0
+                const isMentioned = Boolean(mentionResult && mentionResult.items_count > 0)
                 if (isMentioned) {
                   platformMentions++
                 }
-                
+
                 research.push({
                   keyword,
                   platform: platformName,
@@ -301,9 +299,8 @@ export const processAISeoAnalysis = inngest.createFunction(
     const totals = await step.run('calculate-totals', async () => {
       const totalMentions = platformResults.reduce((sum, p) => sum + p.mentionsCount, 0)
       const totalImpressions = platformResults.reduce((sum, p) => sum + p.impressions, 0)
-      
+
       // Calculate averages (handle empty array case)
-      const platformCount = platformResults.length > 0 ? platformResults.length : 1
       const avgMentionRate = platformResults.length > 0
         ? platformResults.reduce((sum, p) => sum + p.mentionRate, 0) / platformResults.length
         : 0

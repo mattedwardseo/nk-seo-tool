@@ -6,7 +6,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { createId } from '@paralleldrive/cuid2'
-import type { AISeoRunStatus, AISeoSentiment } from '@prisma/client'
+import { Prisma, type AISeoRunStatus, type AISeoSentiment } from '@prisma/client'
 
 // ============================================================================
 // Types
@@ -125,6 +125,7 @@ export async function getAISeoRun(runId: string): Promise<AISeoRunSummary | null
     startedAt: run.started_at,
     completedAt: run.completed_at,
     errorMessage: run.error_message,
+    recommendations: run.recommendations as string | null,
   }
 }
 
@@ -270,7 +271,7 @@ export async function createAISeoResult(input: CreateAISeoResultInput): Promise<
       is_cited: input.citationRate > 0,
       citation_url: null,
       sentiment: 'NEUTRAL',
-      competitor_mentions: null,
+      competitor_mentions: Prisma.JsonNull,
       raw_response: input.rawResponse,
     },
   })
@@ -324,7 +325,7 @@ export async function addAISeoResult(input: AISeoResultInput): Promise<string> {
       is_cited: input.isCited,
       citation_url: input.citationUrl,
       sentiment: input.sentiment,
-      competitor_mentions: input.competitorMentions || null,
+      competitor_mentions: input.competitorMentions || Prisma.JsonNull,
       raw_response: input.rawResponse,
     },
   })

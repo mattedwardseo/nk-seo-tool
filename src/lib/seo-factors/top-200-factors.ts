@@ -128,9 +128,9 @@ export function getFactorsGroupedByType(): Record<SEOFactorType | 'Untyped', SEO
 
   for (const factor of TOP_200_FACTORS) {
     const type = factor.type || 'Untyped'
-    if (type in grouped) {
-      grouped[type].push(factor)
-    } else {
+    if (type in grouped && grouped[type]) {
+      grouped[type]!.push(factor)
+    } else if (grouped['Untyped']) {
       grouped['Untyped'].push(factor)
     }
   }
@@ -158,23 +158,23 @@ export function getLocalSEOFactors(): SEOFactor[] {
 export function getDentalPracticeSEOTips(): { factor: SEOFactor; tip: string }[] {
   return [
     {
-      factor: TOP_200_FACTORS[5], // Entities in Title Tag
+      factor: TOP_200_FACTORS[5]!, // Entities in Title Tag
       tip: 'Include your dental practice name and city in your title tag (e.g., "Bright Smiles Dental | Arlington TX Dentist")'
     },
     {
-      factor: TOP_200_FACTORS[0], // LSI Words
+      factor: TOP_200_FACTORS[0]!, // LSI Words
       tip: 'Use dental-related LSI keywords like "teeth cleaning", "dental checkup", "oral health", "dental implants"'
     },
     {
-      factor: TOP_200_FACTORS[26], // Referring Domains
+      factor: TOP_200_FACTORS[26]!, // Referring Domains
       tip: 'Get backlinks from local business directories, dental associations, and local news sites'
     },
     {
-      factor: TOP_200_FACTORS[18], // Load Time
+      factor: TOP_200_FACTORS[18]!, // Load Time
       tip: 'Optimize images and enable caching to keep load time under 1.5 seconds for better mobile experience'
     },
     {
-      factor: TOP_200_FACTORS[47], // Word Count
+      factor: TOP_200_FACTORS[47]!, // Word Count
       tip: 'Create comprehensive service pages with 800+ words covering procedures, benefits, and FAQs'
     },
   ]

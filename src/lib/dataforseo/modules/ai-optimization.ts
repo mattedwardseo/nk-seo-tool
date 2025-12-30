@@ -17,6 +17,28 @@ const dataForSEOClient = getDataForSEOClient()
 // Types
 // ============================================================================
 
+// Generic DataForSEO API response structure
+interface DataForSEOResponse<T = unknown> {
+  version: string
+  status_code: number
+  status_message: string
+  time: string
+  cost: number
+  tasks_count: number
+  tasks_error: number
+  tasks: {
+    id: string
+    status_code: number
+    status_message: string
+    time: string
+    cost: number
+    result_count: number
+    path: string[]
+    data: unknown
+    result: T[] | null
+  }[]
+}
+
 export type LLMPlatform = 'google' | 'chat_gpt' | 'claude' | 'gemini' | 'perplexity'
 
 // LLM Mentions API Types
@@ -137,15 +159,17 @@ export async function searchLLMMentionsLive(
   request: LLMMentionsSearchRequest
 ): Promise<LLMMentionsSearchResult | null> {
   try {
-    const response = await dataForSEOClient.post('/v3/ai_optimization/llm_mentions/search/live', [request])
+    const response = await dataForSEOClient.post<DataForSEOResponse<LLMMentionsSearchResult>>(
+      '/v3/ai_optimization/llm_mentions/search/live',
+      [request]
+    )
     
-    if (!response.tasks || response.tasks.length === 0) {
+    const task = response.tasks?.[0]
+    if (!task) {
       console.error('LLM Mentions API: No tasks in response')
       return null
     }
 
-    const task = response.tasks[0]
-    
     // Check for API errors
     if (task.status_code !== 20000) {
       console.error('LLM Mentions API error:', {
@@ -157,18 +181,17 @@ export async function searchLLMMentionsLive(
     }
 
     // Check if result exists and has data
-    if (!task.result || task.result.length === 0) {
+    const result = task.result?.[0]
+    if (!result) {
       // No results found - this is not necessarily an error, just no mentions
       return null
     }
 
-    const result = task.result[0] as LLMMentionsSearchResult
-    
     // Ensure items array exists even if empty
     if (!result.items) {
       result.items = []
     }
-    
+
     return result
   } catch (error) {
     console.error('LLM Mentions API request failed:', error)
@@ -202,18 +225,29 @@ export async function getLLMAggregatedMetrics(
     aiPlatform,
   } = options
 
-  const response = await dataForSEOClient.post('/v3/ai_optimization/llm_mentions/aggregated_metrics/live', [{
-    target,
-    location_code: locationCode,
-    language_code: languageCode,
-    ai_platform: aiPlatform,
-  }])
+  interface AggregatedMetricsResult {
+    ai_search_volume: number
+    impressions: number
+    mentions_count: number
+    platforms: { platform: string; mentions_count: number }[]
+  }
 
-  if (!response.tasks || response.tasks.length === 0 || !response.tasks[0].result) {
+  const response = await dataForSEOClient.post<DataForSEOResponse<AggregatedMetricsResult>>(
+    '/v3/ai_optimization/llm_mentions/aggregated_metrics/live',
+    [{
+      target,
+      location_code: locationCode,
+      language_code: languageCode,
+      ai_platform: aiPlatform,
+    }]
+  )
+
+  const result = response.tasks?.[0]?.result?.[0]
+  if (!result) {
     return null
   }
 
-  return response.tasks[0].result[0]
+  return result
 }
 
 // ============================================================================
@@ -240,20 +274,22 @@ export async function queryChatGPT(
       depth = 0,
     } = options
 
-    const response = await dataForSEOClient.post('/v3/ai_optimization/llm_responses/chatgpt/live', [{
-      keyword,
-      location_code: locationCode,
-      language_code: languageCode,
-      depth,
-    }])
+    const response = await dataForSEOClient.post<DataForSEOResponse<LLMResponsesResult>>(
+      '/v3/ai_optimization/llm_responses/chatgpt/live',
+      [{
+        keyword,
+        location_code: locationCode,
+        language_code: languageCode,
+        depth,
+      }]
+    )
 
-    if (!response.tasks || response.tasks.length === 0) {
+    const task = response.tasks?.[0]
+    if (!task) {
       console.error('ChatGPT API: No tasks in response')
       return null
     }
 
-    const task = response.tasks[0]
-    
     if (task.status_code !== 20000) {
       console.error('ChatGPT API error:', {
         status_code: task.status_code,
@@ -263,11 +299,12 @@ export async function queryChatGPT(
       return null
     }
 
-    if (!task.result || task.result.length === 0) {
+    const result = task.result?.[0]
+    if (!result) {
       return null
     }
 
-    return task.result[0] as LLMResponsesResult
+    return result
   } catch (error) {
     console.error('ChatGPT API request failed:', error)
     return null
@@ -292,18 +329,22 @@ export async function queryGemini(
     depth = 0,
   } = options
 
-  const response = await dataForSEOClient.post('/v3/ai_optimization/llm_responses/gemini/live', [{
-    keyword,
-    location_code: locationCode,
-    language_code: languageCode,
-    depth,
-  }])
+  const response = await dataForSEOClient.post<DataForSEOResponse<LLMResponsesResult>>(
+    '/v3/ai_optimization/llm_responses/gemini/live',
+    [{
+      keyword,
+      location_code: locationCode,
+      language_code: languageCode,
+      depth,
+    }]
+  )
 
-  if (!response.tasks || response.tasks.length === 0 || !response.tasks[0].result) {
+  const result = response.tasks?.[0]?.result?.[0]
+  if (!result) {
     return null
   }
 
-  return response.tasks[0].result[0] as LLMResponsesResult
+  return result
 }
 
 /**
@@ -322,17 +363,21 @@ export async function queryPerplexity(
     languageCode = 'en',
   } = options
 
-  const response = await dataForSEOClient.post('/v3/ai_optimization/llm_responses/perplexity/live', [{
-    keyword,
-    location_code: locationCode,
-    language_code: languageCode,
-  }])
+  const response = await dataForSEOClient.post<DataForSEOResponse<LLMResponsesResult>>(
+    '/v3/ai_optimization/llm_responses/perplexity/live',
+    [{
+      keyword,
+      location_code: locationCode,
+      language_code: languageCode,
+    }]
+  )
 
-  if (!response.tasks || response.tasks.length === 0 || !response.tasks[0].result) {
+  const result = response.tasks?.[0]?.result?.[0]
+  if (!result) {
     return null
   }
 
-  return response.tasks[0].result[0] as LLMResponsesResult
+  return result
 }
 
 /**
@@ -354,20 +399,22 @@ export async function queryGoogleAIOverview(
       depth = 0,
     } = options
 
-    const response = await dataForSEOClient.post('/v3/ai_optimization/llm_responses/google/live/advanced', [{
-      keyword,
-      location_code: locationCode,
-      language_code: languageCode,
-      depth,
-    }])
+    const response = await dataForSEOClient.post<DataForSEOResponse<LLMResponsesResult>>(
+      '/v3/ai_optimization/llm_responses/google/live/advanced',
+      [{
+        keyword,
+        location_code: locationCode,
+        language_code: languageCode,
+        depth,
+      }]
+    )
 
-    if (!response.tasks || response.tasks.length === 0) {
+    const task = response.tasks?.[0]
+    if (!task) {
       console.error('Google AI Overview API: No tasks in response')
       return null
     }
 
-    const task = response.tasks[0]
-    
     if (task.status_code !== 20000) {
       console.error('Google AI Overview API error:', {
         status_code: task.status_code,
@@ -377,11 +424,12 @@ export async function queryGoogleAIOverview(
       return null
     }
 
-    if (!task.result || task.result.length === 0) {
+    const result = task.result?.[0]
+    if (!result) {
       return null
     }
 
-    return task.result[0] as LLMResponsesResult
+    return result
   } catch (error) {
     console.error('Google AI Overview API request failed:', error)
     return null
@@ -409,17 +457,21 @@ export async function getAIKeywordSearchVolume(
     languageCode = 'en',
   } = options
 
-  const response = await dataForSEOClient.post('/v3/ai_optimization/ai_keyword_data/search_volume/live', [{
-    keywords,
-    location_code: locationCode,
-    language_code: languageCode,
-  }])
+  const response = await dataForSEOClient.post<DataForSEOResponse<AIKeywordDataResult>>(
+    '/v3/ai_optimization/ai_keyword_data/search_volume/live',
+    [{
+      keywords,
+      location_code: locationCode,
+      language_code: languageCode,
+    }]
+  )
 
-  if (!response.tasks || response.tasks.length === 0 || !response.tasks[0].result) {
+  const result = response.tasks?.[0]?.result
+  if (!result) {
     return []
   }
 
-  return response.tasks[0].result as AIKeywordDataResult[]
+  return result
 }
 
 // ============================================================================

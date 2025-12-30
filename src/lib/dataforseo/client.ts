@@ -225,6 +225,41 @@ export class DataForSEOClient {
       }
     }
   }
+
+  /**
+   * Make a raw POST request to any DataForSEO API endpoint.
+   *
+   * Useful for newer APIs not yet covered by the official client library.
+   *
+   * @param endpoint - API endpoint path (e.g., '/v3/ai_optimization/llm_mentions/search/live')
+   * @param body - Request body to send
+   * @returns Promise resolving to the API response
+   *
+   * @example
+   * ```typescript
+   * const result = await client.post('/v3/ai_optimization/llm_mentions/search/live', [{ target: [...] }]);
+   * ```
+   */
+  async post<T = unknown>(endpoint: string, body: unknown): Promise<T> {
+    const url = `${this.config.baseUrl}${endpoint}`
+
+    return generalLimiter.schedule(async () => {
+      const response = await this.httpClient.fetch(url, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new DataForSEOAPIError(
+          `API request failed: ${response.status} ${response.statusText} - ${errorText}`,
+          response.status
+        )
+      }
+
+      return response.json() as Promise<T>
+    })
+  }
 }
 
 /**
