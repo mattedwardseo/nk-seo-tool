@@ -1,42 +1,82 @@
 # SEO Audit Platform - AI Assistant Context
 
-**Last Updated**: 2025-12-18
+**Last Updated**: 2025-12-30
 **Current Phase**: Phase 18 - UI/UX Enhancements & GBP Deep Integration
 **Tech Stack**: Next.js 16, TypeScript, Prisma, TimescaleDB, Inngest, Sentry
+**Deployment**: Vercel (https://nk-seo-tool.vercel.app)
+**Repository**: https://github.com/mattedwardseo/nk-seo-tool
 
-## Quick Resume (Session 83)
+## Quick Resume (Session 84)
 
-**What We Did**: GBP Decoupling & UI Enhancements
+**What We Did**: Vercel Deployment & Build Fixes
 
-**GBP Deep Integration Complete:**
-- ✅ Added `domain_id` to `gbp_snapshots` table (direct domain link without campaign)
-- ✅ Added `domain_id` to `gbp_detailed_profiles` table
-- ✅ Implemented `/api/gbp/fetch` with `fetchDetailed=true` for Posts/Q&A/Reviews
-- ✅ Fixed work hours path: `work_time.work_hours.timetable` (per DataForSEO docs)
-- ✅ Fixed attributes parsing: object with category keys, not array
-- ✅ Added rating_distribution extraction from My Business Info API
-- ✅ Updated `getGBPProfileForDomain` to merge detailed data from `gbp_detailed_profiles`
-- ✅ Domain-based operations: `updateGBPPostsDataByDomain()`, `updateGBPQADataByDomain()`, `updateGBPReviewsDataByDomain()`
-- ✅ Added "Fetch Posts & Q&A" button on GBP page
+**Vercel Deployment Complete:**
+- ✅ Pushed all code to GitHub (441 files, 116k+ insertions)
+- ✅ Fixed TypeScript strict mode errors for production build
+- ✅ Configured Sentry to skip source maps when not fully configured
+- ✅ Fixed auth middleware login loop bug
+- ✅ Added DataForSEO client `post()` method for AI Optimization API
 
-**Other UI Enhancements:**
-- ✅ Domain switcher with pinned/recent domains (`is_pinned` column)
-- ✅ Historical change columns (7d, 30d, 90d) for keyword tracking
-- ✅ GBP Profile Completeness scoring (100-point weighted formula)
-- ✅ Fixed competitor import from geo-grid (avgRank/SOV joined from competitor_stats)
+**TypeScript Fixes:**
+- ✅ AI SEO pages: removed unused imports (Sparkles, useRouter), fixed null checks
+- ✅ DataForSEO client: added generic `post<T>()` method with proper typing
+- ✅ AI Optimization module: typed all API responses with `DataForSEOResponse<T>`
+- ✅ AI SEO operations: fixed Prisma `JsonNull` for JSON fields
+- ✅ Inngest functions: fixed event data typing, variable scoping
+- ✅ SEO factors: added null checks and non-null assertions
 
-**Build Status**: ✅ Passing
+**Build Status**: ✅ Passing on Vercel
 
-**Pending Items (from research doc):**
-- Sparklines in keyword tracking table
-- Site audit per-page SEO scoring (100-point)
-- Geo-relevance scoring for dental on-page SEO
-- XLSX/PDF export options
-- Enhanced breadcrumbs
-- Nav badges for items needing attention
+**Previous Session (83) - GBP Deep Integration:**
+- Domain switcher with pinned/recent domains
+- GBP standalone tool without campaign requirement
+- Historical change columns for keyword tracking
 
 > **Full session history**: See `PROGRESS.md`
 > **Research doc**: See `latest-claude-research.md`
+
+---
+
+## Vercel Deployment
+
+### Required Environment Variables
+
+Set these in Vercel → Project → Settings → Environment Variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | ✅ | Neon PostgreSQL connection string (pooled) |
+| `DIRECT_URL` | ✅ | Neon direct connection (for migrations) |
+| `AUTH_SECRET` | ✅ | Random 32+ char string for NextAuth. Generate: `openssl rand -base64 32` |
+| `AUTH_TRUST_HOST` | ✅ | Set to `true` for Vercel |
+| `DATAFORSEO_LOGIN` | ✅ | DataForSEO API login |
+| `DATAFORSEO_PASSWORD` | ✅ | DataForSEO API password |
+| `SENTRY_DSN` | Optional | Sentry error tracking DSN |
+| `SENTRY_ORG` | Optional | Sentry org slug (for source maps) |
+| `SENTRY_PROJECT` | Optional | Sentry project slug (for source maps) |
+| `SENTRY_AUTH_TOKEN` | Optional | Sentry auth token (for source maps) |
+| `INNGEST_SIGNING_KEY` | Optional | For background jobs in production |
+| `INNGEST_EVENT_KEY` | Optional | For background jobs in production |
+
+### Creating a Test User
+
+After deployment, create a user in the database:
+
+```bash
+# Run locally with production DATABASE_URL
+DATABASE_URL="postgresql://..." npx tsx scripts/seed-user.ts
+```
+
+Or use the `/register` page directly.
+
+**Test credentials** (after seeding):
+- Email: `test@example.com`
+- Password: `password123`
+
+### Production URLs
+- App: https://nk-seo-tool.vercel.app
+- Login: https://nk-seo-tool.vercel.app/login
+- Register: https://nk-seo-tool.vercel.app/register
 
 ---
 
@@ -248,6 +288,24 @@ npm run seed:audit
 - Google Ads blocks "dentist + city" keywords
 - `getMostRecentVolume()` looks back through ALL historical months
 - Stores `volume_date` to show data source age
+
+### DataForSEO AI Optimization API
+- **Client method**: `dataForSEOClient.post<T>(endpoint, body)` for raw API calls
+- **Module**: `src/lib/dataforseo/modules/ai-optimization.ts`
+- **Typed responses**: Use `DataForSEOResponse<T>` generic type
+- **Endpoints used**:
+  - `/v3/ai_optimization/llm_mentions/search/live` - LLM mentions search
+  - `/v3/ai_optimization/llm_mentions/aggregated_metrics/live` - Aggregated metrics
+  - `/v3/ai_optimization/llm_responses/chatgpt/live` - ChatGPT queries
+  - `/v3/ai_optimization/llm_responses/google/live/advanced` - Google AI Overview
+  - `/v3/ai_optimization/ai_keyword_data/search_volume/live` - AI keyword volume
+
+### Auth Middleware
+- **File**: `src/middleware.ts`
+- **Pattern**: Check auth routes FIRST to prevent login loops
+- **Protected routes**: `/`, `/d/*`, `/audits/*`, etc.
+- **Auth routes**: `/login`, `/register` - excluded from protection
+- **Session**: JWT-based via NextAuth v5
 
 ---
 
