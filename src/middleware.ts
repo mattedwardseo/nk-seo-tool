@@ -47,26 +47,39 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Check if the route is protected
-  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
-
-  // Check if the route is an auth route
+  // Check if the route is an auth route FIRST (to avoid login loops)
   const isAuthRoute = authRoutes.some((route) => pathname === route)
 
-  // Get the session
-  const session = await auth()
-  const isAuthenticated = !!session?.user
+  // Auth routes are handled separately - don't treat as protected
+  if (isAuthRoute) {
+    const session = await auth()
+    const isAuthenticated = !!session?.user
 
-  // Redirect unauthenticated users to login
-  if (isProtectedRoute && !isAuthenticated) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('callbackUrl', pathname)
-    return NextResponse.redirect(loginUrl)
+    // Redirect authenticated users away from auth pages
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    // Allow unauthenticated users to access auth pages
+    return NextResponse.next()
   }
 
-  // Redirect authenticated users away from auth pages
-  if (isAuthRoute && isAuthenticated) {
-    return NextResponse.redirect(new URL('/', request.url))
+  // Check if the route is protected (excluding root exactly for auth routes)
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    route === '/' ? pathname === '/' : pathname.startsWith(route)
+  )
+
+  // Get the session for protected routes
+  if (isProtectedRoute) {
+    const session = await auth()
+    const isAuthenticated = !!session?.user
+
+    // Redirect unauthenticated users to login
+    if (!isAuthenticated) {
+      const loginUrl = new URL('/login', request.url)
+      loginUrl.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
   }
 
   return NextResponse.next()
