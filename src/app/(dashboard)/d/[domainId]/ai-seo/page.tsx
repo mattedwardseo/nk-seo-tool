@@ -44,13 +44,6 @@ interface AISeoRun {
   completedAt: string | null
 }
 
-const platformConfig: Record<string, { label: string; color: string; icon: string }> = {
-  chatgpt: { label: 'ChatGPT', color: 'bg-emerald-500', icon: '🤖' },
-  gemini: { label: 'Gemini', color: 'bg-blue-500', icon: '✨' },
-  perplexity: { label: 'Perplexity', color: 'bg-purple-500', icon: '🔍' },
-  claude: { label: 'Claude', color: 'bg-orange-500', icon: '🧠' },
-}
-
 export default function AISeoPage() {
   const params = useParams()
   const domainId = params.domainId as string

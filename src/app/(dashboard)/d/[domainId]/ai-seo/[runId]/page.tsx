@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Bot,
@@ -11,7 +11,6 @@ import {
   ExternalLink,
   MessageSquare,
   TrendingUp,
-  Sparkles,
   AlertCircle,
   Loader2,
 } from 'lucide-react'
@@ -87,7 +86,6 @@ const platformLabels: Record<string, string> = {
 
 export default function AISeoRunDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const domainId = params.domainId as string
   const runId = params.runId as string
   
@@ -175,9 +173,12 @@ export default function AISeoRunDetailPage() {
   }
 
   const keywordResults = results.filter(r => r.keyword)
-  const platformResults = results.filter(r => !r.keyword)
+  const _platformResults = results.filter(r => !r.keyword)
   const mentionedKeywords = keywordResults.filter(r => r.isMentioned)
-  const citedKeywords = keywordResults.filter(r => r.isCited)
+  const _citedKeywords = keywordResults.filter(r => r.isCited)
+  // Suppress unused variable warnings
+  void _platformResults
+  void _citedKeywords
 
   return (
     <div className="space-y-6">
@@ -412,14 +413,16 @@ export default function AISeoRunDetailPage() {
                     const insights = researchInsights.filter(r => r.keyword === keyword)
                     if (insights.length === 0) return null
                     
-                    const mainInsight = insights.find(r => r.aiAnswer) || insights[0]
+                    const mainInsight = insights.find(r => r.aiAnswer) ?? insights[0]
+                    if (!mainInsight) return null
+
                     const allCitations = insights.flatMap(r => r.citations || [])
                       .filter((c, index, arr) => arr.findIndex(other => other.url === c.url) === index)
                     const allQuestions = insights.flatMap(r => r.relatedQuestions || [])
                       .filter((q, index, arr) => arr.indexOf(q) === index)
                     const allCompetitors = insights.flatMap(r => r.competitorMentions || [])
                       .filter((c, index, arr) => arr.findIndex(other => other.name === c.name) === index)
-                    
+
                     return (
                       <div key={keyword} className="border rounded-lg p-4 space-y-3">
                         <div>

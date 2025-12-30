@@ -175,11 +175,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const mappedPlatforms = llmPlatforms
       .map((p: string) => {
         const normalized = p.toLowerCase()
-        if (normalized === 'chatgpt' || normalized === 'chat_gpt') return 'chat_gpt'
-        if (normalized === 'google' || normalized === 'google ai overview') return 'google'
+        if (normalized === 'chatgpt' || normalized === 'chat_gpt') return 'chat_gpt' as const
+        if (normalized === 'google' || normalized === 'google ai overview') return 'google' as const
         return null
       })
-      .filter((p): p is string => p !== null && (p === 'google' || p === 'chat_gpt'))
+      .filter((p): p is 'chat_gpt' | 'google' => p !== null)
     
     // If no valid platforms after mapping, return error
     if (mappedPlatforms.length === 0) {
