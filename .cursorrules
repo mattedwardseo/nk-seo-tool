@@ -1,0 +1,58 @@
+# Next.js TypeScript SEO Tool - Cursor Rules
+
+## Project Overview
+Next.js 16 SEO audit platform for dental practices using TypeScript, App Router, Prisma with TimescaleDB, and DataForSEO API.
+
+## Technology Stack
+- Framework: Next.js 16 (App Router)
+- Language: TypeScript (strict mode)
+- Database: PostgreSQL with TimescaleDB (Prisma)
+- Styling: Tailwind CSS
+- API: DataForSEO v3
+- Background Jobs: Inngest
+- Error Tracking: Sentry
+
+## Code Style
+- TypeScript strict mode for ALL code
+- Prefer interfaces over types
+- Functional components with explicit return types
+- File naming: PascalCase for components, kebab-case for directories
+- Favor named exports
+
+## Next.js Best Practices
+- Server Components by default
+- Only use 'use client' for: event handlers, browser APIs, React hooks
+- Wrap client components in Suspense
+- Implement loading.tsx and error.tsx
+- Use Next.js metadata API for SEO
+
+## Database Patterns
+- Use Prisma client from @/lib/prisma
+- For time-series queries, use raw SQL with time_bucket
+- Handle errors with try/catch
+- Never expose database errors to clients
+
+## API Routes
+- Validate inputs with Zod
+- Return format: { success, data, error }
+- Use proper HTTP status codes
+- Implement rate limiting
+
+## Security
+- Never expose API keys in client code
+- Validate all user inputs
+- Use environment variables for secrets
+- User-friendly error messages only
+
+## Performance
+- Use Next.js Image component
+- Implement caching strategies
+- Minimize 'use client' boundaries
+- Dynamic imports for heavy components
+
+## Key Conventions
+1. TypeScript strict mode always
+2. Server Components by default
+3. Validate with Zod
+4. Error boundaries everywhere
+5. Optimize for performance

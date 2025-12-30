@@ -1,6 +1,3 @@
-// Prisma schema for SEO Audit Platform
-// Uses PostgreSQL with TimescaleDB on Neon
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,47 +8,1274 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  audits    Audit[]
+model accounts {
+  id                  String  @id
+  user_id             String
+  type                String
+  provider            String
+  provider_account_id String
+  refresh_token       String?
+  access_token        String?
+  expires_at          Int?
+  token_type          String?
+  scope               String?
+  id_token            String?
+  session_state       String?
+  users               users   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@index([email])
-  @@map("users")
+  @@unique([provider, provider_account_id])
+  @@index([user_id])
 }
 
-model Audit {
-  id        String        @id @default(cuid())
-  userId    String
-  domain    String
-  status    String        @default("pending")
-  score     Int?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  metrics   AuditMetric[]
+/// This table has subclasses and requires additional setup for migrations. Visit https://pris.ly/d/table-inheritance for more info.
+model audit_metrics {
+  id           Int      @default(autoincrement())
+  audit_id     String
+  metric_name  String   @db.VarChar(100)
+  metric_value Decimal? @db.Decimal(10, 2)
+  recorded_at  DateTime @db.Timestamptz(6)
+  metadata     Json?
+  audits       audits   @relation(fields: [audit_id], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@id([id, recorded_at])
+  @@index([audit_id, recorded_at(sort: Desc)])
+  @@index([metric_name])
+  @@index([recorded_at(sort: Desc)])
+}
+
+model audits {
+  id                 String             @id
+  userId             String
+  domain             String
+  status             AuditStatus        @default(PENDING)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  progress           Int                @default(0)
+  current_step       String?            @db.VarChar(50)
+  step_results       Json?
+  error_message      String?
+  started_at         DateTime?          @db.Timestamptz(6)
+  completed_at       DateTime?          @db.Timestamptz(6)
+  business_name      String?            @db.VarChar(200)
+  competitor_domains String[]           @default([])
+  gmb_place_id       String?            @db.VarChar(100)
+  location           String?            @db.VarChar(200)
+  step_errors        Json?
+  target_keywords    String[]           @default([])
+  city               String?            @db.VarChar(100)
+  state              String?            @db.VarChar(2)
+
+  // Phase 12: Domain-centric architecture
+  domain_id          String?            // Foreign key to domains (nullable for migration)
+
+  audit_metrics      audit_metrics[]
+  users              users              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site_audit_scans   site_audit_scans[]
+  domains            domains?           @relation(fields: [domain_id], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
   @@index([domain])
   @@index([status])
-  @@index([createdAt(sort: Desc)])
-  @@map("audits")
+  @@index([userId])
+  @@index([domain_id, createdAt(sort: Desc)])
 }
 
-model AuditMetric {
-  id          Int      @id @default(autoincrement())
-  auditId     String   @map("audit_id")
-  metricName  String   @map("metric_name") @db.VarChar(100)
-  metricValue Decimal? @map("metric_value") @db.Decimal(10, 2)
-  recordedAt  DateTime @map("recorded_at") @db.Timestamptz()
-  metadata    Json?
-  audit       Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+model competitor_stats {
+  id              String     @id
+  scan_id         String
+  business_name   String     @db.VarChar(200)
+  gmb_cid         String?    @db.VarChar(50)
+  rating          Decimal?   @db.Decimal(2, 1)
+  review_count    Int?
+  avg_rank        Decimal    @db.Decimal(5, 2)
+  times_in_top_3  Int
+  times_in_top_10 Int
+  times_in_top_20 Int
+  share_of_voice  Decimal    @db.Decimal(5, 2)
+  prev_avg_rank   Decimal?   @db.Decimal(5, 2)
+  rank_change     Decimal?   @db.Decimal(5, 2)
+  created_at      DateTime   @default(now())
+  grid_scans      grid_scans @relation(fields: [scan_id], references: [id], onDelete: Cascade)
 
-  @@index([auditId, recordedAt(sort: Desc)])
-  @@index([metricName])
-  @@index([recordedAt(sort: Desc)])
-  @@map("audit_metrics")
+  @@unique([scan_id, business_name])
+  @@index([scan_id])
+}
+
+model gbp_snapshots {
+  id                  String          @id
+  campaign_id         String?         // Optional - can be linked directly to domain
+  domain_id           String?         // Direct domain link (Phase 17 - GBP decoupling)
+  business_name       String          @db.VarChar(200)
+  gmb_place_id        String?         @db.VarChar(100)
+  gmb_cid             String?         @db.VarChar(50)
+  rating              Decimal?        @db.Decimal(2, 1)
+  review_count        Int?
+  rating_distribution Json?
+  completeness_score  Int?
+  address             String?         @db.VarChar(500)
+  phone               String?         @db.VarChar(50)
+  website             String?         @db.VarChar(500)
+  categories          String[]        @default([])
+  attributes          Json?
+  work_hours          Json?
+  photos              Json?
+  description         String?         @db.Text
+  raw_data            Json?
+  created_at          DateTime        @default(now())
+  updated_at          DateTime        @default(now()) @updatedAt
+  local_campaigns     local_campaigns? @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  domains             domains?        @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id, created_at(sort: Desc)])
+  @@index([domain_id, created_at(sort: Desc)])
+}
+
+// ============================================
+// GBP Competitor Profiles (Phase 12)
+// Cached GBP data for competitor comparison
+// ============================================
+
+model gbp_competitor_profiles {
+  id                    String          @id @default(cuid())
+  campaign_id           String
+  gmb_cid               String          @db.VarChar(50)
+  business_name         String          @db.VarChar(200)
+
+  // Profile basics
+  rating                Decimal?        @db.Decimal(2, 1)
+  review_count          Int?
+  description           String?         @db.Text
+
+  // Categories
+  primary_category      String?         @db.VarChar(100)
+  additional_categories String[]        @default([])
+
+  // Name analysis
+  name_has_keyword      Boolean         @default(false)
+  name_has_city         Boolean         @default(false)
+
+  // Contact & location
+  address               String?         @db.VarChar(500)
+  phone                 String?         @db.VarChar(50)
+  website               String?         @db.VarChar(500)
+
+  // Profile completeness indicators
+  has_description       Boolean         @default(false)
+  description_length    Int             @default(0)
+  has_photos            Boolean         @default(false)
+  photo_count           Int             @default(0)
+  has_services          Boolean         @default(false)
+  has_products          Boolean         @default(false)
+  is_claimed            Boolean         @default(false)
+
+  // Attributes (JSON: { accessibility: [...], amenities: [...], ... })
+  attributes            Json?
+  attribute_count       Int             @default(0)
+
+  // Work hours
+  work_hours            Json?
+  hours_complete        Boolean         @default(false)
+
+  // Calculated
+  completeness_score    Int?
+
+  // Raw API response
+  raw_data              Json?
+
+  fetched_at            DateTime        @default(now())
+  created_at            DateTime        @default(now())
+
+  // Relations
+  local_campaigns       local_campaigns @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+
+  @@unique([campaign_id, gmb_cid])
+  @@index([campaign_id, fetched_at(sort: Desc)])
+}
+
+// ============================================
+// GBP Detailed Profiles (Phase 13 - Enhanced GBP Comparison)
+// Extended GBP data: Posts, Q&A, Reviews, Services, Products
+// Fetched on-demand via manual trigger (saves API costs)
+// ============================================
+
+model gbp_detailed_profiles {
+  id                    String          @id @default(cuid())
+  campaign_id           String?         // Optional - can be linked to campaign OR domain
+  domain_id             String?         // Direct domain link (Phase 17 - GBP decoupling)
+  gmb_cid               String          @db.VarChar(50)
+  business_name         String          @db.VarChar(200)
+
+  // ============================================
+  // Basic Info (from My Business Info - already in gbp_competitor_profiles)
+  // Duplicated here for complete profile in one table
+  // ============================================
+  rating                Decimal?        @db.Decimal(2, 1)
+  review_count          Int?
+  primary_category      String?         @db.VarChar(100)
+  additional_categories String[]        @default([])
+  phone                 String?         @db.VarChar(50)
+  website               String?         @db.VarChar(500)
+  address               String?         @db.VarChar(500)
+  description           String?         @db.Text
+  work_hours            Json?
+  attributes            Json?
+  is_claimed            Boolean         @default(false)
+  photo_count           Int?
+
+  // ============================================
+  // Reviews Summary (from Google Reviews Task API)
+  // Fetched with depth: 20 reviews
+  // ============================================
+  reviews_fetched_at    DateTime?       @db.Timestamptz(6)
+  reviews_count_by_rating Json?         // { "1": n, "2": n, "3": n, "4": n, "5": n }
+  recent_reviews        Json?           // Array of last 20 reviews with text, rating, owner_response
+  avg_response_time     String?         @db.VarChar(100) // e.g., "Usually responds within a day"
+  owner_response_rate   Decimal?        @db.Decimal(5, 2) // % of reviews with owner response (0-100)
+  owner_response_count  Int?            // Count of reviews with owner responses
+
+  // ============================================
+  // Posts/Updates (from My Business Updates Task API)
+  // Google Posts - events, offers, updates
+  // ============================================
+  posts_fetched_at      DateTime?       @db.Timestamptz(6)
+  posts_count           Int?            // Total posts found
+  recent_posts          Json?           // Array of last 10 posts with text, images, links
+  last_post_date        DateTime?       @db.Timestamptz(6) // Most recent post date
+  posts_per_month_avg   Decimal?        @db.Decimal(5, 2) // Average posts per month
+
+  // ============================================
+  // Q&A (from Questions and Answers Task API)
+  // Questions asked by customers with answers
+  // ============================================
+  qa_fetched_at         DateTime?       @db.Timestamptz(6)
+  questions_count       Int?            // Total questions
+  answered_count        Int?            // Questions with at least one answer
+  unanswered_count      Int?            // Questions without answers (opportunity!)
+  recent_qa             Json?           // Array of last 20 Q&A pairs
+
+  // ============================================
+  // Services & Products (from My Business Info)
+  // Services offered and products sold
+  // ============================================
+  services              Json?           // Array of service objects with names, descriptions
+  services_count        Int?
+  products              Json?           // Array of product objects
+  products_count        Int?
+  menu_url              String?         @db.VarChar(500)  // Menu/price list URL
+  booking_url           String?         @db.VarChar(500)  // Online booking URL
+
+  // ============================================
+  // Metadata
+  // ============================================
+  fetched_at            DateTime        @default(now()) @db.Timestamptz(6)
+  created_at            DateTime        @default(now()) @db.Timestamptz(6)
+
+  // Raw API responses (for debugging and future extraction)
+  raw_posts_data        Json?
+  raw_qa_data           Json?
+  raw_reviews_data      Json?
+
+  // Relations
+  local_campaigns       local_campaigns? @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  domains               domains?         @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+
+  @@unique([campaign_id, gmb_cid])
+  @@unique([domain_id, gmb_cid])
+  @@index([campaign_id, fetched_at(sort: Desc)])
+  @@index([domain_id, fetched_at(sort: Desc)])
+}
+
+model grid_point_results {
+  id            String     @id
+  scan_id       String
+  grid_row      Int
+  grid_col      Int
+  lat           Decimal    @db.Decimal(10, 7)
+  lng           Decimal    @db.Decimal(10, 7)
+  keyword       String     @db.VarChar(255)
+  rank          Int?
+  total_results Int        @default(20)
+  top_rankings  Json?
+  created_at    DateTime   @default(now())
+  grid_scans    grid_scans @relation(fields: [scan_id], references: [id], onDelete: Cascade)
+
+  @@unique([scan_id, grid_row, grid_col, keyword])
+  @@index([keyword])
+  @@index([scan_id])
+}
+
+model grid_scans {
+  id                 String               @id
+  campaign_id        String
+  status             GridScanStatus       @default(PENDING)
+  progress           Int                  @default(0)
+  started_at         DateTime?            @db.Timestamptz(6)
+  completed_at       DateTime?            @db.Timestamptz(6)
+  error_message      String?
+  failed_points      Int                  @default(0)
+  api_calls_used     Int                  @default(0)
+  estimated_cost     Decimal?             @db.Decimal(10, 4)
+  avg_rank           Decimal?             @db.Decimal(5, 2)
+  share_of_voice     Decimal?             @db.Decimal(5, 2)
+  top_competitor     String?              @db.VarChar(200)
+  created_at         DateTime             @default(now())
+  competitor_stats   competitor_stats[]
+  grid_point_results grid_point_results[]
+  local_campaigns    local_campaigns      @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id, created_at(sort: Desc)])
+  @@index([status])
+}
+
+model local_campaigns {
+  id                       String                    @id
+  user_id                  String
+  business_name            String                    @db.VarChar(200)
+  gmb_place_id             String?                   @db.VarChar(100)
+  gmb_cid                  String?                   @db.VarChar(50)
+  center_lat               Decimal                   @db.Decimal(10, 7)
+  center_lng               Decimal                   @db.Decimal(10, 7)
+  grid_size                Int                       @default(7)
+  grid_radius_miles        Decimal                   @default(5) @db.Decimal(5, 2)
+  keywords                 String[]                  @default([])
+  status                   LocalCampaignStatus       @default(ACTIVE)
+  scan_frequency           String                    @default("weekly")
+  next_scan_at             DateTime?                 @db.Timestamptz(6)
+  last_scan_at             DateTime?                 @db.Timestamptz(6)
+  created_at               DateTime                  @default(now())
+  updated_at               DateTime
+
+  // Phase 12: Domain-centric architecture (allows multiple campaigns per domain)
+  domain_id                String?
+
+  gbp_snapshots            gbp_snapshots[]
+  gbp_competitor_profiles  gbp_competitor_profiles[]
+  gbp_detailed_profiles    gbp_detailed_profiles[]
+  grid_scans               grid_scans[]
+  users                    users                     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  domains                  domains?                  @relation(fields: [domain_id], references: [id], onDelete: SetNull)
+
+  @@index([next_scan_at])
+  @@index([user_id, status])
+  @@index([domain_id, status])
+}
+
+model sessions {
+  id            String   @id
+  session_token String   @unique
+  user_id       String
+  expires       DateTime
+  users         users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+model tracked_keywords {
+  id                   String    @id
+  user_id              String
+  domain               String    @db.VarChar(255)
+  keyword              String    @db.VarChar(255)
+  is_active            Boolean   @default(true)
+  created_at           DateTime  @default(now())
+  updated_at           DateTime
+  competition          Decimal?  @db.Decimal(5, 4)
+  competition_level    String?   @db.VarChar(10)
+  cpc                  Decimal?  @db.Decimal(10, 2)
+  data_fetched_at      DateTime?
+  difficulty           Int?
+  high_top_of_page_bid Decimal?  @db.Decimal(10, 2)
+  historical_date      String?   @db.VarChar(7)
+  intent               String?   @db.VarChar(20)
+  low_top_of_page_bid  Decimal?  @db.Decimal(10, 2)
+  search_volume        Int?
+
+  // Phase 12: Domain-centric architecture
+  domain_id            String?
+
+  users                users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  domains              domains?  @relation(fields: [domain_id], references: [id], onDelete: SetNull)
+
+  @@unique([user_id, domain, keyword])
+  @@index([domain])
+  @@index([user_id, domain, is_active])
+  @@index([domain_id, is_active])
+}
+
+model users {
+  id                        String                    @id
+  email                     String                    @unique
+  name                      String?
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime
+  email_verified            DateTime?
+  image                     String?
+  password                  String?
+  accounts                  accounts[]
+  audits                    audits[]
+  local_campaigns           local_campaigns[]
+  sessions                  sessions[]
+  tracked_keywords          tracked_keywords[]
+  site_audit_scans          site_audit_scans[]
+
+  // Phase 12: Domain-centric architecture
+  domains                   domains[]
+  seo_calculations          seo_calculations[]
+  google_ads_calculations   google_ads_calculations[]
+  capacity_calculations     capacity_calculations[]
+  archived_audits           archived_audits[]
+  archived_site_audit_scans archived_site_audit_scans[]
+  archived_local_campaigns  archived_local_campaigns[]
+
+  // Phase 14: Keyword Optimization Audits
+  keyword_optimization_audits keyword_optimization_audits[]
+
+  // Phase 15: Keyword Tracking Tool
+  keyword_tracking_runs      keyword_tracking_runs[]
+  keyword_tracking_schedules keyword_tracking_schedules[]
+
+  // Phase 18: AI SEO Tool
+  ai_seo_runs                ai_seo_runs[]
+
+  @@index([email])
+}
+
+model verification_tokens {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum AuditStatus {
+  PENDING
+  CRAWLING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum GridScanStatus {
+  PENDING
+  SCANNING
+  COMPLETED
+  FAILED
+}
+
+enum LocalCampaignStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum DomainStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// ============================================
+// Site Audit Models (Phase 10)
+// Full site crawl using DataForSEO OnPage API
+// ============================================
+
+enum SiteAuditStatus {
+  PENDING
+  SUBMITTING
+  CRAWLING
+  FETCHING_RESULTS
+  COMPLETED
+  FAILED
+}
+
+model site_audit_scans {
+  id                      String           @id @default(cuid())
+  user_id                 String
+  domain                  String           @db.VarChar(255)
+  status                  SiteAuditStatus  @default(PENDING)
+  progress                Int              @default(0)
+
+  // DataForSEO task tracking
+  task_id                 String?          @db.VarChar(100)
+
+  // Crawl configuration
+  max_crawl_pages         Int              @default(100)
+  enable_javascript       Boolean          @default(true)
+  enable_browser_rendering Boolean         @default(true)
+  store_raw_html          Boolean          @default(false)
+  calculate_keyword_density Boolean        @default(false)
+  start_url               String?          @db.VarChar(500)
+
+  // Optional link to existing audit
+  audit_id                String?
+
+  // Phase 12: Domain-centric architecture
+  domain_id               String?
+
+  // Timing & cost
+  started_at              DateTime?        @db.Timestamptz(6)
+  completed_at            DateTime?        @db.Timestamptz(6)
+  api_cost                Decimal?         @db.Decimal(10, 4)
+  error_message           String?
+
+  created_at              DateTime         @default(now())
+  updated_at              DateTime         @updatedAt
+
+  // Relations
+  users                   users            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  audits                  audits?          @relation(fields: [audit_id], references: [id], onDelete: SetNull)
+  domains                 domains?         @relation(fields: [domain_id], references: [id], onDelete: SetNull)
+  summary                 site_audit_summaries?
+  pages                   site_audit_pages[]
+
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([task_id])
+  @@index([status])
+  @@index([domain_id, created_at(sort: Desc)])
+}
+
+model site_audit_summaries {
+  id                      String           @id @default(cuid())
+  scan_id                 String           @unique
+
+  // Crawl stats
+  total_pages             Int              @default(0)
+  crawled_pages           Int              @default(0)
+  crawl_stop_reason       String?          @db.VarChar(50)
+
+  // Issue counts (from page_metrics.checks)
+  errors_count            Int              @default(0)
+  warnings_count          Int              @default(0)
+  notices_count           Int              @default(0)
+
+  // Aggregates
+  onpage_score            Decimal?         @db.Decimal(5, 2)
+  avg_lcp                 Decimal?         @db.Decimal(10, 2)
+  avg_cls                 Decimal?         @db.Decimal(5, 4)
+
+  // Resources & links (from page_metrics)
+  total_images            Int              @default(0)
+  broken_resources        Int              @default(0)
+  internal_links          Int              @default(0)
+  external_links          Int              @default(0)
+  broken_links            Int              @default(0)
+  non_indexable           Int              @default(0)
+  duplicate_title         Int              @default(0)
+  duplicate_description   Int              @default(0)
+  duplicate_content       Int              @default(0)
+
+  // Domain info (JSON for flexibility)
+  domain_info             Json?
+  ssl_info                Json?
+  page_metrics_checks     Json?
+
+  created_at              DateTime         @default(now())
+
+  // Relations
+  scan                    site_audit_scans @relation(fields: [scan_id], references: [id], onDelete: Cascade)
+}
+
+model site_audit_pages {
+  id                      String           @id @default(cuid())
+  scan_id                 String
+
+  url                     String           @db.VarChar(2000)
+  url_hash                String           @db.VarChar(64)
+  status_code             Int
+
+  // Scores
+  onpage_score            Decimal?         @db.Decimal(5, 2)
+
+  // Meta
+  title                   String?          @db.VarChar(1000)
+  description             String?          @db.VarChar(2000)
+  h1_tags                 String[]         @default([])
+
+  // Content
+  word_count              Int?
+
+  // Redirect tracking
+  redirect_location       String?          @db.VarChar(2000)
+  is_redirect             Boolean          @default(false)
+
+  // Timing & checks (JSON for 60+ fields)
+  page_timing             Json?
+  checks                  Json?
+  meta                    Json?
+
+  // Denormalized for filtering
+  issue_types             String[]         @default([])
+  issue_count             Int              @default(0)
+
+  created_at              DateTime         @default(now())
+
+  // Relations
+  scan                    site_audit_scans @relation(fields: [scan_id], references: [id], onDelete: Cascade)
+
+  @@unique([scan_id, url_hash])
+  @@index([scan_id, onpage_score(sort: Desc)])
+  @@index([scan_id, issue_count(sort: Desc)])
+}
+
+// ============================================
+// Phase 12: Domain-Centric Architecture
+// Parent domain/project hierarchy
+// ============================================
+
+model domains {
+  id                    String                @id @default(cuid())
+  user_id               String
+  name                  String                @db.VarChar(200) // "The Dental SEO Company"
+  domain                String                @db.VarChar(255) // "fielderparkdental.com"
+  business_name         String?               @db.VarChar(200)
+  city                  String?               @db.VarChar(100)
+  state                 String?               @db.VarChar(2)
+  status                DomainStatus          @default(ACTIVE)
+  is_pinned             Boolean               @default(false)
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+
+  users                 users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  audits                audits[]
+  site_audit_scans      site_audit_scans[]
+  local_campaigns       local_campaigns[]
+  tracked_keywords      tracked_keywords[]
+  domain_settings       domain_settings?
+  seo_calculations      seo_calculations[]
+  google_ads_calculations google_ads_calculations[]
+  capacity_calculations capacity_calculations[]
+
+  // Phase 14: Keyword Optimization Audits
+  keyword_optimization_audits keyword_optimization_audits[]
+
+  // Phase 15: Keyword Tracking Tool
+  keyword_tracking_runs      keyword_tracking_runs[]
+  keyword_tracking_schedule  keyword_tracking_schedules?
+
+  // Phase 17: Backlinks Tool
+  backlink_profile           backlink_profiles?
+
+  // Phase 17: GBP Decoupling - Direct GBP link
+  gbp_snapshots              gbp_snapshots[]
+  gbp_detailed_profiles      gbp_detailed_profiles[]
+
+  // Phase 18: AI SEO Tool
+  ai_seo_runs                ai_seo_runs[]
+  ai_seo_competitors         ai_seo_competitors[]
+
+  @@unique([user_id, domain])
+  @@index([user_id, status])
+}
+
+model domain_settings {
+  id                    String                @id @default(cuid())
+  domain_id             String                @unique
+
+  // SEO Calculator defaults
+  seo_default_ctr_scenario      String        @default("average")  // 'bad', 'average', 'good'
+  seo_default_website_conv_rate Decimal       @default(0.15)  @db.Decimal(5, 4)
+  seo_default_reception_rate    Decimal       @default(0.66)  @db.Decimal(5, 4)
+  seo_default_attendance_rate   Decimal       @default(0.85)  @db.Decimal(5, 4)
+  seo_default_referral_rate     Decimal       @default(0.25)  @db.Decimal(5, 4)
+  seo_default_marketing_invest  Decimal       @default(5000)  @db.Decimal(10, 2)
+  seo_default_stv               Decimal       @default(1000)  @db.Decimal(10, 2)
+  seo_default_ltv               Decimal       @default(10000) @db.Decimal(10, 2)
+  seo_default_local_ctr         Decimal       @default(0.35)  @db.Decimal(5, 4)
+
+  // Google Ads Calculator defaults
+  ads_default_daily_budget      Decimal       @default(100)   @db.Decimal(10, 2)
+  ads_default_avg_cpc           Decimal       @default(5.00)  @db.Decimal(6, 2)
+  ads_default_impression_share  Decimal       @default(0.25)  @db.Decimal(5, 4)
+
+  // Capacity Calculator defaults
+  cap_default_operatories       Int           @default(4)
+  cap_default_days_open         Int           @default(5)
+  cap_default_hours_per_day     Decimal       @default(8.0)   @db.Decimal(4, 2)
+  cap_default_appt_duration     Int           @default(60)    // minutes
+
+  // Site Audit defaults
+  site_audit_max_pages          Int           @default(100)
+  site_audit_enable_javascript  Boolean       @default(true)
+
+  // Local SEO defaults
+  local_seo_grid_size           Int           @default(7)
+  local_seo_radius_miles        Decimal       @default(5)     @db.Decimal(5, 2)
+
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+  domain                domains               @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// Phase 13: Domain-Scoped Calculators
+// SEO Calculator, Google Ads Calculator, Capacity Calculator
+// ============================================
+
+model seo_calculations {
+  id                    String                @id @default(cuid())
+  domain_id             String
+  user_id               String
+  name                  String?               @db.VarChar(200)
+
+  // Keyword snapshot
+  keywords_snapshot     Json?                 // Array of {keyword, sv, cpc, position}
+  combined_search_volume Int                  @default(5000)
+
+  // Local Maps inputs
+  local_search_volume   Int?                  // Local pack search volume
+  local_ctr             Decimal?              @db.Decimal(5, 4) // Local CTR (default 0.35)
+  local_conv_rate       Decimal?              @db.Decimal(5, 4) // Maps conversion rate
+
+  // Input rates
+  ctr_scenario          String                @default("average") @db.VarChar(20) // 'bad', 'average', 'good', 'custom'
+  ctr_percentage        Decimal               @default(0.15) @db.Decimal(5, 4)
+  website_conv_rate     Decimal               @default(0.15) @db.Decimal(5, 4)
+  reception_rate        Decimal               @default(0.66) @db.Decimal(5, 4)
+  attendance_rate       Decimal               @default(0.85) @db.Decimal(5, 4)
+  referral_rate         Decimal               @default(0.25) @db.Decimal(5, 4)
+
+  // Business inputs
+  marketing_investment  Decimal               @default(5000) @db.Decimal(10, 2)
+  avg_short_term_value  Decimal               @default(1000) @db.Decimal(10, 2)
+  avg_lifetime_value    Decimal               @default(10000) @db.Decimal(10, 2)
+  operatories           Int?
+  days_open             Int?
+
+  // Calculated results (stored for historical comparison)
+  organic_traffic       Int?
+  local_traffic         Int?
+  total_traffic         Int?
+  prospects             Decimal?              @db.Decimal(10, 2)
+  np_bookings           Decimal?              @db.Decimal(10, 2)
+  actual_nps            Decimal?              @db.Decimal(10, 2)
+  np_referrals          Decimal?              @db.Decimal(10, 2)
+  adjusted_nps          Decimal?              @db.Decimal(10, 2)
+  cost_per_acquisition  Decimal?              @db.Decimal(10, 2)
+  short_term_return     Decimal?              @db.Decimal(12, 2)
+  short_term_roi        Decimal?              @db.Decimal(10, 2)
+  lifetime_return       Decimal?              @db.Decimal(14, 2)
+  lifetime_roi          Decimal?              @db.Decimal(10, 2)
+
+  notes                 String?               @db.Text
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+
+  domains               domains               @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  users                 users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([domain_id, created_at(sort: Desc)])
+}
+
+model google_ads_calculations {
+  id                    String                @id @default(cuid())
+  domain_id             String
+  user_id               String
+  name                  String?               @db.VarChar(200)
+
+  // Ad campaign inputs (user's spec)
+  total_budget          Decimal               @default(5000) @db.Decimal(10, 2)   // Monthly total budget
+  mgmt_fee_type         String                @default("percentage")              // 'percentage' or 'fixed'
+  mgmt_fee_value        Decimal               @default(0.30) @db.Decimal(10, 4)   // 0.30 = 30% or fixed $ amount
+  avg_cpc               Decimal               @default(7.00) @db.Decimal(6, 2)
+
+  // Same funnel rates as SEO
+  website_conv_rate     Decimal               @default(0.15) @db.Decimal(5, 4)
+  reception_rate        Decimal               @default(0.66) @db.Decimal(5, 4)
+  attendance_rate       Decimal               @default(0.85) @db.Decimal(5, 4)
+  referral_rate         Decimal               @default(0.25) @db.Decimal(5, 4)
+
+  // Business inputs
+  avg_short_term_value  Decimal               @default(1000) @db.Decimal(10, 2)
+  avg_lifetime_value    Decimal               @default(10000) @db.Decimal(10, 2)
+
+  // Calculated results (stored for history)
+  ad_spend_budget       Decimal?              @db.Decimal(10, 2)  // total_budget - mgmt_fee
+  monthly_clicks        Int?
+  prospects             Decimal?              @db.Decimal(10, 2)
+  np_bookings           Decimal?              @db.Decimal(10, 2)
+  actual_nps            Decimal?              @db.Decimal(10, 2)
+  np_referrals          Decimal?              @db.Decimal(10, 2)
+  adjusted_nps          Decimal?              @db.Decimal(10, 2)
+  cost_per_acquisition  Decimal?              @db.Decimal(10, 2)
+  short_term_return     Decimal?              @db.Decimal(12, 2)
+  short_term_roas       Decimal?              @db.Decimal(10, 2)  // Return on Ad Spend
+  lifetime_return       Decimal?              @db.Decimal(14, 2)
+  lifetime_roas         Decimal?              @db.Decimal(10, 2)
+
+  notes                 String?               @db.Text
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+
+  domains               domains               @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  users                 users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([domain_id, created_at(sort: Desc)])
+}
+
+model capacity_calculations {
+  id                    String                @id @default(cuid())
+  domain_id             String
+  user_id               String
+  name                  String?               @db.VarChar(200)
+
+  // Practice setup
+  operatories           Int                   @default(4)
+  days_open_per_week    Int                   @default(5)
+  hours_per_day         Decimal               @default(8.0) @db.Decimal(4, 2)
+  appointment_duration  Int                   @default(60) // minutes
+
+  // Current state
+  current_patients_monthly Int?
+  current_revenue_monthly  Decimal?           @db.Decimal(12, 2)
+
+  // Value metrics
+  avg_short_term_value  Decimal               @default(1000) @db.Decimal(10, 2)
+  avg_lifetime_value    Decimal               @default(10000) @db.Decimal(10, 2)
+
+  // Calculated results
+  max_appointments_daily   Int?
+  max_appointments_weekly  Int?
+  max_appointments_monthly Int?
+  max_revenue_monthly      Decimal?           @db.Decimal(14, 2)
+  capacity_utilization     Decimal?           @db.Decimal(5, 2) // percentage
+  revenue_gap              Decimal?           @db.Decimal(14, 2)
+  potential_ltv_gap        Decimal?           @db.Decimal(14, 2)
+
+  notes                 String?               @db.Text
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+
+  domains               domains               @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  users                 users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([domain_id, created_at(sort: Desc)])
+}
+
+// ============================================
+// Phase 14: Keyword Optimization Audits
+// AI-powered on-page SEO analysis with DataForSEO
+// ============================================
+
+enum KeywordAuditStatus {
+  PENDING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+model keyword_optimization_audits {
+  id                    String                @id @default(cuid())
+  domain_id             String?
+  user_id               String
+
+  // Target info
+  url                   String                @db.VarChar(2000)
+  target_keyword        String                @db.VarChar(255)
+  location_name         String?               @db.VarChar(200)  // e.g., "Chicago,Illinois,United States"
+  language_code         String                @default("en") @db.VarChar(5)
+
+  // Status
+  status                KeywordAuditStatus    @default(PENDING)
+  error_message         String?
+
+  // API costs tracking
+  api_cost              Decimal?              @db.Decimal(10, 4)
+
+  // Raw data from DataForSEO (stored for reference)
+  ranked_keywords_data  Json?                 // Domain's current keyword rankings
+  serp_data             Json?                 // Live SERP results for target keyword
+  backlinks_data        Json?                 // Backlinks summary
+  keyword_suggestions   Json?                 // Related keyword opportunities
+  on_page_data          Json?                 // On-page analysis (if available)
+
+  // Synthesized report (generated by Claude API)
+  report_markdown       String?               @db.Text
+  report_data           Json?                 // Structured report data for UI
+
+  // Scores (extracted for quick filtering)
+  overall_score         Int?                  // 0-100
+  title_score           Int?                  // 0-10
+  meta_score            Int?                  // 0-10
+  heading_score         Int?                  // 0-10
+  content_score         Int?                  // 0-10
+  internal_links_score  Int?                  // 0-10
+
+  // Key metrics (denormalized for display)
+  current_position      Int?                  // SERP position for target keyword
+  search_volume         Int?                  // Monthly search volume
+  keyword_difficulty    Int?                  // 0-100
+  domain_rank           Int?                  // DataForSEO domain rank
+  referring_domains     Int?                  // Total referring domains
+
+  // Timestamps
+  started_at            DateTime?             @db.Timestamptz(6)
+  completed_at          DateTime?             @db.Timestamptz(6)
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+
+  // Relations
+  domains               domains?              @relation(fields: [domain_id], references: [id], onDelete: SetNull)
+  users                 users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([domain_id, created_at(sort: Desc)])
+  @@index([status])
+}
+
+// ============================================
+// Phase 15: Keyword Tracking Tool
+// Domain-scoped SERP position tracking over time
+// ============================================
+
+enum KeywordTrackingRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// Parent: Tracking runs (like grid_scans for local SEO)
+model keyword_tracking_runs {
+  id                    String                      @id @default(cuid())
+  domain_id             String
+  user_id               String
+  location_name         String                      @default("United States") @db.VarChar(200)
+  language_code         String                      @default("en") @db.VarChar(5)
+  status                KeywordTrackingRunStatus    @default(PENDING)
+  progress              Int                         @default(0)
+  error_message         String?
+  triggered_by          String?                     @db.VarChar(20) // 'manual' | 'scheduled'
+
+  // Summary metrics (denormalized for quick display)
+  keywords_tracked      Int                         @default(0)
+  avg_position          Decimal?                    @db.Decimal(5, 2)
+  keywords_in_top_3     Int                         @default(0)
+  keywords_in_top_10    Int                         @default(0)
+  keywords_in_top_100   Int                         @default(0)
+  keywords_not_ranking  Int                         @default(0)
+
+  // Position changes vs previous run
+  improved_count        Int                         @default(0)
+  declined_count        Int                         @default(0)
+  unchanged_count       Int                         @default(0)
+  new_rankings_count    Int                         @default(0)
+  lost_rankings_count   Int                         @default(0)
+
+  // Cost tracking
+  api_calls_used        Int                         @default(0)
+  estimated_cost        Decimal?                    @db.Decimal(10, 4)
+
+  // Timestamps
+  started_at            DateTime?                   @db.Timestamptz(6)
+  completed_at          DateTime?                   @db.Timestamptz(6)
+  created_at            DateTime                    @default(now())
+  updated_at            DateTime                    @updatedAt
+
+  // Relations
+  domains               domains                     @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  users                 users                       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  results               keyword_tracking_results[]
+
+  @@index([domain_id, created_at(sort: Desc)])
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([status])
+}
+
+// Child: Individual keyword results per run
+model keyword_tracking_results {
+  id                    String                      @id @default(cuid())
+  run_id                String
+  tracked_keyword_id    String                      // FK to tracked_keywords
+  keyword               String                      @db.VarChar(255) // Snapshot
+  search_volume         Int?
+  volume_date           String?                     @db.VarChar(7) // "YYYY-MM" when volume is from historical data
+  cpc                   Decimal?                    @db.Decimal(10, 2)
+  keyword_difficulty    Int?                        // 0-100 difficulty score from DataForSEO
+  position              Int?                        // 1-100, null = not ranking
+  previous_position     Int?
+  position_change       Int?                        // Positive = improved
+  ranking_url           String?                     @db.VarChar(2000)
+  serp_features         String[]                    @default([])
+  top_3_domains         Json?
+  // Local Pack tracking (Phase 16 Sprint 3)
+  local_pack_position   Int?                        // Position within local pack (1-3), null = not in pack
+  local_pack_rating     Decimal?                    @db.Decimal(2, 1) // Rating 1.0-5.0
+  local_pack_reviews    Int?                        // Number of reviews
+  local_pack_cid        String?                     @db.VarChar(30) // Google CID for the listing
+  created_at            DateTime                    @default(now())
+
+  // Relations
+  run                   keyword_tracking_runs       @relation(fields: [run_id], references: [id], onDelete: Cascade)
+
+  @@unique([run_id, tracked_keyword_id])
+  @@index([run_id, position])
+  @@index([tracked_keyword_id])
+}
+
+// Schedule: Automated tracking configuration (one per domain)
+model keyword_tracking_schedules {
+  id                    String                      @id @default(cuid())
+  domain_id             String                      @unique // One schedule per domain
+  user_id               String
+  is_enabled            Boolean                     @default(true)
+  frequency             String                      @default("weekly") @db.VarChar(20) // weekly|biweekly|monthly
+  day_of_week           Int?                        // 0-6 for weekly (0 = Sunday)
+  day_of_month          Int?                        // 1-31 for monthly
+  time_of_day           String                      @default("06:00") @db.VarChar(5) // HH:MM UTC
+  location_name         String                      @default("United States") @db.VarChar(200)
+  language_code         String                      @default("en") @db.VarChar(5)
+  next_run_at           DateTime?                   @db.Timestamptz(6)
+  last_run_at           DateTime?                   @db.Timestamptz(6)
+  last_run_id           String?
+  created_at            DateTime                    @default(now())
+  updated_at            DateTime                    @updatedAt
+
+  // Relations
+  domains               domains                     @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  users                 users                       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([is_enabled, next_run_at])
+}
+
+// ============================================
+// Phase 17: Domain-Scoped Backlinks Tool
+// Backlink profile tracking and competitor gap analysis
+// ============================================
+
+model backlink_profiles {
+  id                    String                @id @default(cuid())
+  domain_id             String
+
+  // Core metrics from DataForSEO Summary
+  total_backlinks       Int                   @default(0)
+  referring_domains_count Int                 @default(0)
+  domain_rank           Int                   @default(0)      // DataForSEO rank (0-1000)
+  spam_score            Int                   @default(0)      // Backlinks spam score (0-100)
+  target_spam_score     Int?                                   // Target domain spam score
+  dofollow_ratio        Decimal               @default(0)      @db.Decimal(5, 4)  // 0.0000-1.0000
+
+  // Link type breakdown
+  dofollow_backlinks    Int                   @default(0)
+  nofollow_backlinks    Int                   @default(0)
+
+  // Domain rank breakdown (new vs lost)
+  new_backlinks_30d     Int?                                   // New backlinks in last 30 days
+  lost_backlinks_30d    Int?                                   // Lost backlinks in last 30 days
+  new_referring_30d     Int?                                   // New referring domains in last 30 days
+  lost_referring_30d    Int?                                   // Lost referring domains in last 30 days
+
+  // Timestamps
+  fetched_at            DateTime              @default(now())  @db.Timestamptz(6)
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+
+  // Relations
+  domains               domains               @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  referring_domains     backlink_referring_domains[]
+  anchors               backlink_anchors[]
+
+  @@unique([domain_id])  // One profile per domain
+  @@index([domain_id, fetched_at(sort: Desc)])
+}
+
+model backlink_referring_domains {
+  id                    String                @id @default(cuid())
+  profile_id            String
+
+  // Domain info
+  domain                String                @db.VarChar(255)
+  backlinks             Int                   @default(0)      // Links from this domain
+  domain_rank           Int                   @default(0)      // Domain's authority rank
+  first_seen            DateTime?             @db.Timestamptz(6)
+
+  // Link types from this domain
+  dofollow              Int                   @default(0)
+  nofollow              Int                   @default(0)
+
+  created_at            DateTime              @default(now())
+
+  // Relations
+  profile               backlink_profiles     @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@index([profile_id, domain_rank(sort: Desc)])
+  @@index([profile_id, backlinks(sort: Desc)])
+}
+
+model backlink_anchors {
+  id                    String                @id @default(cuid())
+  profile_id            String
+
+  // Anchor info
+  anchor                String                @db.VarChar(500)
+  backlinks             Int                   @default(0)
+  referring_domains     Int                   @default(0)
+
+  // Types
+  dofollow              Int                   @default(0)
+  nofollow              Int                   @default(0)
+
+  created_at            DateTime              @default(now())
+
+  // Relations
+  profile               backlink_profiles     @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@index([profile_id, backlinks(sort: Desc)])
+}
+
+// Archive tables for migration
+model archived_audits {
+  id                 String             @id
+  userId             String
+  domain             String
+  status             AuditStatus
+  createdAt          DateTime
+  step_results       Json?
+  archived_at        DateTime           @default(now())
+  users              users              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, archived_at(sort: Desc)])
+}
+
+model archived_site_audit_scans {
+  id                 String             @id
+  user_id            String
+  domain             String
+  status             SiteAuditStatus
+  created_at         DateTime
+  archived_at        DateTime           @default(now())
+  users              users              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  @@index([user_id, archived_at(sort: Desc)])
+}
+
+model archived_local_campaigns {
+  id                 String             @id
+  user_id            String
+  business_name      String
+  created_at         DateTime
+  archived_at        DateTime           @default(now())
+  users              users              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  @@index([user_id, archived_at(sort: Desc)])
+}
+
+// ============================================================================
+// AI SEO - LLM Visibility Tracking
+// ============================================================================
+
+model ai_seo_runs {
+  id              String            @id
+  domain_id       String
+  user_id         String
+  status          AISeoRunStatus    @default(PENDING)
+  keywords        String[]          @default([])
+  llm_platforms   String[]          @default(["chatgpt", "gemini", "perplexity"])
+  business_name   String            @db.VarChar(200)
+  
+  // Results summary
+  visibility_score        Int?              // 0-100 overall score
+  total_mentions          Int?              @default(0)
+  total_citations         Int?              @default(0)
+  recommendations         String?           @db.Text // JSON array of recommendation objects
+  
+  // Timestamps
+  created_at      DateTime          @default(now())
+  started_at      DateTime?         @db.Timestamptz(6)
+  completed_at    DateTime?         @db.Timestamptz(6)
+  
+  // Error handling
+  error_message   String?
+  
+  // Relations
+  domain          domains           @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  user            users             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  results         ai_seo_results[]
+  platform_scores ai_seo_platform_scores[]
+  
+  @@index([domain_id, created_at(sort: Desc)])
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([status])
+}
+
+model ai_seo_results {
+  id              String            @id
+  run_id          String
+  keyword         String            @db.VarChar(200)
+  llm_platform    String            @db.VarChar(50)
+  
+  // Mention data
+  is_mentioned    Boolean           @default(false)
+  mention_context String?           @db.Text
+  mention_rank    Int?              // Position in response (1 = first mentioned)
+  
+  // Citation data  
+  is_cited        Boolean           @default(false)
+  citation_url    String?           @db.VarChar(500)
+  
+  // Sentiment
+  sentiment       AISeoSentiment    @default(NEUTRAL)
+  
+  // Competitor mentions
+  competitor_mentions Json?         // Array of competitor names mentioned
+  
+  // Raw response (for debugging/analysis)
+  raw_response    String?           @db.Text
+  
+  created_at      DateTime          @default(now())
+  
+  // Relations
+  run             ai_seo_runs       @relation(fields: [run_id], references: [id], onDelete: Cascade)
+  
+  @@unique([run_id, keyword, llm_platform])
+  @@index([run_id])
+  @@index([keyword])
+}
+
+model ai_seo_platform_scores {
+  id              String            @id
+  run_id          String
+  llm_platform    String            @db.VarChar(50)
+  
+  // Scores
+  mention_rate    Decimal           @db.Decimal(5, 4)   // 0.0000 to 1.0000
+  average_position Decimal?         @db.Decimal(5, 2)   // Average mention position
+  sentiment_score Decimal           @db.Decimal(3, 2)   // -1.00 to 1.00
+  citation_rate   Decimal           @db.Decimal(5, 4)   // 0.0000 to 1.0000
+  visibility_score Int              @default(0)         // 0-100
+  
+  created_at      DateTime          @default(now())
+  
+  // Relations
+  run             ai_seo_runs       @relation(fields: [run_id], references: [id], onDelete: Cascade)
+  
+  @@unique([run_id, llm_platform])
+  @@index([run_id])
+}
+
+model ai_seo_competitors {
+  id              String            @id
+  domain_id       String
+  competitor_name String            @db.VarChar(200)
+  competitor_domain String?         @db.VarChar(200)
+  
+  // Aggregated visibility data
+  last_visibility_score Int?        @default(0)
+  last_updated    DateTime?
+  
+  created_at      DateTime          @default(now())
+  
+  // Relations
+  domain          domains           @relation(fields: [domain_id], references: [id], onDelete: Cascade)
+  
+  @@unique([domain_id, competitor_name])
+  @@index([domain_id])
+}
+
+enum AISeoRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AISeoSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
 }
