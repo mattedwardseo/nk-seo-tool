@@ -9,15 +9,23 @@ const nextConfig: NextConfig = {
   },
 }
 
+// Only enable Sentry source map uploads if properly configured
+const sentryEnabled = process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_AUTH_TOKEN
+
 export default withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://github.com/getsentry/sentry-webpack-plugin#options
 
-  org: 'your-org', // Will use SENTRY_ORG env var if not set
-  project: 'seo-tool', // Will use SENTRY_PROJECT env var if not set
+  org: process.env.SENTRY_ORG || 'placeholder',
+  project: process.env.SENTRY_PROJECT || 'placeholder',
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
+
+  // Disable source map upload if Sentry is not properly configured
+  sourcemaps: {
+    disable: !sentryEnabled,
+  },
 
   // For all available options, see:
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
